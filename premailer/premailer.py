@@ -18,6 +18,69 @@ class PremailerError(Exception):
 grouping_regex = re.compile('([:\-\w]*){([^}]+)}')
 
 
+def _split_spacing_properties(rules):
+    """
+    Split margin or padding properties to explicit one.
+    For example,
+
+    margin:0;
+
+    will be splited as:
+
+    margin-top:0:
+    margin-right:0:
+    margin-bottom:0:
+    margin-left:0:
+
+    This is usefull to properly merge styles.
+    """
+    orules = []
+    for selector, style in rules:
+
+        properties = ""
+        for property_ in style.split(';'):
+            p, v = property_.split(':')
+            is_spacing = p in ('margin', 'padding')
+
+            if not is_spacing:
+                properties += property_ + ';'
+                continue
+
+            values = v.split()
+            length = len(values)
+
+            if length == 1:
+                top = right = bottom = left = values[0]
+            elif length == 2:
+                top = bottom = values[0]
+                left = right = values[1]
+            elif length == 3:
+                top = values[0]
+                right = left = values[1]
+                bottom = values[2]
+            elif length == 4:
+                top = values[0]
+                right = values[1]
+                bottom = values[2]
+                left = values[3]
+
+            new_properties = ''
+            new_properties += p+'-top:%s;' % top
+            new_properties += p+'-right:%s;' % right
+            new_properties += p+'-bottom:%s;' % bottom
+            new_properties += p+'-left:%s;' % left
+
+            properties += new_properties
+
+        # Remove trailing ';'
+        if properties[-1] == ';':
+            properties = properties[:-1]
+
+        orules.append((selector, properties))
+
+    return orules
+
+
 def _merge_styles(old, new, class_=''):
     """
     if ::
@@ -189,6 +252,8 @@ class Premailer(object):
                                      stylefile)
                 these_rules, these_leftover = self._parse_style_rules(css_body)
                 rules.extend(these_rules)
+
+        rules = _split_spacing_properties(rules)
 
         first_time = []
         first_time_styles = []
